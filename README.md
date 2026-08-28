@@ -2,7 +2,7 @@
 
 Aplicacao desktop para Windows que decodifica arquivos binarios `.bin` do datalogger STM32 e exporta os registros para CSV, XLSX ou ambos.
 
-A logica de protocolo foi separada da interface grafica sem redesenhar o formato binario original: registros de 8 bytes, timestamp de 21 bits, identificacao de padding no ultimo slot dos blocos de 2048 bytes, packet IDs existentes, formulas e correcao de empacotamento do IMU foram preservados.
+A logica de protocolo foi separada da interface grafica sem redesenhar o formato binario original, ou seja, possui registros de 8 bytes, timestamp de 21 bits, identificacao de padding no ultimo slot dos blocos de 2048 bytes epacket IDs existentes.
 
 ## Estrutura
 
