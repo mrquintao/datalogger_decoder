@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDEs
+.idea/
+.vscode/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Logs
+logs/*.log
+!logs/.gitkeep
+
+# OS
+Thumbs.db
+.DS_Store
