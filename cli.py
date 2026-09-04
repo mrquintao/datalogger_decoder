@@ -37,6 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=",",
         help="delimitador do CSV; use ';' para Excel em pt-BR (padrao: ',')",
     )
+    parser.add_argument(
+        "--extended-debug",
+        action="store_true",
+        help="gera a versao completa com campos internos dos pacotes",
+    )
     return parser
 
 
@@ -44,7 +49,12 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging()
     logger = logging.getLogger(__name__)
     args = build_parser().parse_args(argv)
-    csv_path, xlsx_path = output_paths(args.input, args.output, args.format)
+    csv_path, xlsx_path = output_paths(
+        args.input,
+        args.output,
+        args.format,
+        extended_debug=args.extended_debug,
+    )
 
     try:
         result = convert_file(
@@ -52,6 +62,7 @@ def main(argv: list[str] | None = None) -> int:
             csv_path=csv_path,
             xlsx_path=xlsx_path,
             delimiter=args.delimiter,
+            extended_debug=args.extended_debug,
         )
     except (OSError, ValueError, RuntimeError) as exc:
         logger.exception("Falha na conversao via CLI")

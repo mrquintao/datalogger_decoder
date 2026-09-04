@@ -1,6 +1,6 @@
 # Datalogger Decoder
 
-Aplicacao desktop para Windows que decodifica arquivos binarios `.bin` do datalogger STM32 e exporta os registros para CSV, XLSX ou ambos.
+Aplicacao desktop para Windows que decodifica arquivos binarios `.bin` do datalogger STM32 e exporta os registros para CSV, XLSX ou ambos. Por padrao, a saida usa o formato longo e reduzido para analise; o formato completo de debug continua disponivel como opcao avancada.
 
 A logica de protocolo foi separada da interface grafica sem redesenhar o formato binario original, ou seja, possui registros de 8 bytes, timestamp de 21 bits, identificacao de padding no ultimo slot dos blocos de 2048 bytes epacket IDs existentes.
 
@@ -68,6 +68,12 @@ python app.py
 python cli.py data001.bin -f xlsx
 ```
 
+Para gerar a versao completa de debug pela CLI:
+
+```bat
+python cli.py data001.bin -f xlsx --extended-debug
+```
+
 CSV com delimitador `;`:
 
 ```bat
@@ -96,10 +102,11 @@ A pasta `.venv` nao faz parte do ZIP e nao deve ser versionada.
 1. Selecione um arquivo `.bin`.
 2. Escolha a pasta de destino. Por padrao, ao selecionar o `.bin`, a propria pasta do arquivo e sugerida.
 3. Escolha `XLSX`, `CSV` ou `CSV + XLSX`.
-4. Para CSV, selecione o delimitador. O padrao da GUI e `;`, adequado para muitos ambientes Excel/pt-BR.
-5. Clique em **Converter**.
-6. Acompanhe a barra, percentual e contagem de registros.
-7. Ao concluir, use **Abrir pasta de destino** no Windows, se desejar.
+4. Deixe **Opção avançada: versão estendida para debug dos pacotes** desmarcada para a saida reduzida (padrao), ou marque-a para preservar todas as colunas internas do decoder.
+5. Para CSV, selecione o delimitador. O padrao da GUI e `;`, adequado para muitos ambientes Excel/pt-BR.
+6. Clique em **Converter**.
+7. Acompanhe a barra, percentual e contagem de registros.
+8. Ao concluir, use **Abrir pasta de destino** no Windows, se desejar.
 
 Os arquivos recebem nomes como:
 
@@ -107,7 +114,24 @@ Os arquivos recebem nomes como:
 data001.bin
 data001_decoded.csv
 data001_decoded.xlsx
+data001_decoded_debug.csv
+data001_decoded_debug.xlsx
 ```
+
+Os nomes com `_decoded` correspondem ao formato reduzido. Ao marcar a opcao avancada, o sufixo `_decoded_debug` evita que a planilha completa sobrescreva a versao reduzida, e vice-versa.
+
+### Formatos de dados
+
+No modo reduzido, cada grandeza decodificada ocupa uma linha nas colunas:
+
+```text
+source_file, byte_offset, timestamp_raw_ms, time_s, record_type,
+signal, value, unit, source_axis, raw_value, flags
+```
+
+Pacotes `VELOCITY_RPM_FUEL` geram tres linhas e pacotes IMU geram duas. Marcadores de sessao, padding e pacotes desconhecidos permanecem rastreaveis em uma linha sem grandeza inventada. O campo `flags` registra `TIMESTAMP_WRAP`, `PACKING_CORRECTED`, `PADDING` ou `INVALID_PACKET`; sem condicao especial, recebe `OK`.
+
+No modo estendido, cada pacote continua gerando exatamente uma linha com a lista completa e preexistente de campos internos.
 
 ## Processamento em background e thread safety
 
@@ -165,7 +189,7 @@ O log registra inicio da aplicacao, selecao de arquivos/pastas, inicio e termino
 
 ## Testes
 
-Os testes usam apenas `unittest` da biblioteca padrao.
+Os testes usam o runner `unittest` e a dependencia `openpyxl` ja declarada no projeto para validar os arquivos XLSX.
 
 Executar:
 
@@ -183,6 +207,10 @@ Eles cobrem:
 - arquivo vazio e tamanho invalido;
 - caminhos automaticos de saida;
 - conversao CSV em streaming e callback de progresso.
+- formato reduzido em linhas por grandeza;
+- mapeamento logico/fisico real dos eixos da IMU;
+- equivalencia dos valores de velocidade, RPM e combustivel entre os dois modos;
+- cabecalhos e quantidade de linhas dos arquivos XLSX reduzido e estendido.
 
 ## Validacao de sintaxe
 
@@ -225,7 +253,7 @@ Coloque um `.ico` em `assets` e acrescente ao comando do PyInstaller:
 ## Separacao de responsabilidades
 
 - `decoder.py`: conhece somente o protocolo binario e a iteracao dos registros.
-- `converter.py`: conhece os formatos de saida e o callback de progresso, mas nao conhece Tkinter.
+- `converter.py`: formata a saida reduzida ou estendida, grava CSV/XLSX e informa progresso, mas nao conhece Tkinter.
 - `app.py`: conhece Tkinter, threading e fila de eventos, mas reutiliza o motor de conversao.
 - `cli.py`: reutiliza exatamente `converter.py`/`decoder.py`; nao duplica a decodificacao.
 - `logging_config.py`: centraliza onde e como os logs sao gravados.

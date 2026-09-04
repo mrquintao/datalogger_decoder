@@ -46,6 +46,7 @@ class DataloggerDecoderApp:
         self.output_dir_var = tk.StringVar()
         self.format_var = tk.StringVar(value="xlsx")
         self.delimiter_var = tk.StringVar(value=";")
+        self.extended_debug_var = tk.BooleanVar(value=False)
         self.status_var = tk.StringVar(value="Pronto")
         self.progress_text_var = tk.StringVar(value="Progresso: 0%")
         self.records_text_var = tk.StringVar(value="Registros: 0 / 0")
@@ -107,23 +108,32 @@ class DataloggerDecoderApp:
         )
         self.delimiter_combo.grid(row=4, column=1, sticky="w", padx=(10, 0), pady=6)
 
-        ttk.Separator(frame).grid(row=5, column=0, columnspan=3, sticky="ew", pady=16)
+        self.extended_debug_checkbox = ttk.Checkbutton(
+            frame,
+            text="Opção avançada: versão estendida para debug dos pacotes",
+            variable=self.extended_debug_var,
+        )
+        self.extended_debug_checkbox.grid(
+            row=5, column=1, columnspan=2, sticky="w", padx=(10, 0), pady=6
+        )
+
+        ttk.Separator(frame).grid(row=6, column=0, columnspan=3, sticky="ew", pady=16)
 
         self.progress = ttk.Progressbar(frame, mode="determinate", maximum=100)
-        self.progress.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(0, 8))
+        self.progress.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(0, 8))
 
         progress_info = ttk.Frame(frame)
-        progress_info.grid(row=7, column=0, columnspan=3, sticky="ew")
+        progress_info.grid(row=8, column=0, columnspan=3, sticky="ew")
         progress_info.columnconfigure(1, weight=1)
         ttk.Label(progress_info, textvariable=self.progress_text_var).grid(row=0, column=0, sticky="w")
         ttk.Label(progress_info, textvariable=self.records_text_var).grid(row=0, column=1, sticky="e")
 
         ttk.Label(frame, textvariable=self.status_var).grid(
-            row=8, column=0, columnspan=3, sticky="w", pady=(12, 16)
+            row=9, column=0, columnspan=3, sticky="w", pady=(12, 16)
         )
 
         buttons = ttk.Frame(frame)
-        buttons.grid(row=9, column=0, columnspan=3, sticky="e")
+        buttons.grid(row=10, column=0, columnspan=3, sticky="e")
         self.open_folder_button = ttk.Button(
             buttons,
             text="Abrir pasta de destino",
@@ -175,7 +185,13 @@ class DataloggerDecoderApp:
             output_directory = Path(self.output_dir_var.get()) if self.output_dir_var.get() else input_path.parent
             output_format = self.format_var.get()
             delimiter = self.delimiter_var.get()
-            csv_path, xlsx_path = paths_for_directory(input_path, output_directory, output_format)
+            extended_debug = self.extended_debug_var.get()
+            csv_path, xlsx_path = paths_for_directory(
+                input_path,
+                output_directory,
+                output_format,
+                extended_debug=extended_debug,
+            )
         except (OSError, ValueError) as exc:
             messagebox.showerror("Dados invalidos", str(exc))
             return
@@ -189,7 +205,7 @@ class DataloggerDecoderApp:
 
         self.worker = threading.Thread(
             target=self._conversion_worker,
-            args=(input_path, csv_path, xlsx_path, delimiter),
+            args=(input_path, csv_path, xlsx_path, delimiter, extended_debug),
             daemon=True,
             name="datalogger-converter",
         )
@@ -201,6 +217,7 @@ class DataloggerDecoderApp:
         csv_path: Path | None,
         xlsx_path: Path | None,
         delimiter: str,
+        extended_debug: bool,
     ) -> None:
         try:
             result = convert_file(
@@ -208,6 +225,7 @@ class DataloggerDecoderApp:
                 csv_path=csv_path,
                 xlsx_path=xlsx_path,
                 delimiter=delimiter,
+                extended_debug=extended_debug,
                 progress_callback=lambda current, total: self.events.put(
                     ("progress", (current, total))
                 ),
@@ -297,6 +315,7 @@ class DataloggerDecoderApp:
         self.select_output_button.configure(state=state)
         for button in self.format_buttons:
             button.configure(state=state)
+        self.extended_debug_checkbox.configure(state=state)
         if enabled:
             self._update_csv_state()
             self.open_folder_button.configure(

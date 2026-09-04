@@ -17,7 +17,7 @@ TIMESTAMP_MODULUS = 1 << TIMESTAMP_BITS
 TIMESTAMP_MASK = TIMESTAMP_MODULUS - 1
 TIMESTAMP_HALF_RANGE = TIMESTAMP_MODULUS // 2
 
-# A ordem desta lista tambem define a ordem das colunas no CSV/XLSX.
+# A ordem desta lista define as colunas do modo estendido de debug.
 FIELDNAMES = [
     "source_file",
     "record_index",
