@@ -1,259 +1,162 @@
 # Datalogger Decoder
 
-Aplicacao desktop para Windows que decodifica arquivos binarios `.bin` do datalogger STM32 e exporta os registros para CSV, XLSX ou ambos. Por padrao, a saida usa o formato longo e reduzido para analise; o formato completo de debug continua disponivel como opcao avancada.
+O módulo de aquisição de dados (MDA) do carro do Baja UFMG grava tudo o que os sensores leem em um cartão SD, em arquivos binários `dataNNN.bin`. Esses arquivos são compactos e rápidos de gravar, mas ninguém consegue abri-los direto no Excel ou no MATLAB.
 
-A logica de protocolo foi separada da interface grafica sem redesenhar o formato binario original, ou seja, possui registros de 8 bytes, timestamp de 21 bits, identificacao de padding no ultimo slot dos blocos de 2048 bytes epacket IDs existentes.
+O Datalogger Decoder resolve isso: você escolhe o `.bin`, clica em **Converter** e recebe uma planilha CSV ou XLSX pronta para plotar velocidade, RPM, combustível, acelerômetro e giroscópio.
 
-## Estrutura
+## Como usar (sem instalar nada)
 
-```text
-datalogger_decoder/
-├── app.py                 # GUI Tkinter/ttk
-├── cli.py                 # interface de terminal opcional
-├── decoder.py             # protocolo e leitura binaria em streaming
-├── converter.py           # CSV/XLSX e progresso
-├── logging_config.py      # logging em arquivo
-├── requirements.txt
-├── build.bat
-├── .gitignore
-├── assets/
-│   └── README.md
-├── logs/
-│   └── .gitkeep
-└── tests/
-    ├── test_decoder.py
-    └── test_converter.py
-```
+1. Baixe o `DataloggerDecoder.exe` e abra com dois cliques. Funciona em Windows 10 e 11.
+2. Selecione o arquivo `.bin` tirado do cartão SD.
+3. Escolha a pasta onde a planilha será salva. Por padrão é a mesma pasta do `.bin`.
+4. Escolha o formato: `XLSX`, `CSV` ou os dois.
+5. Se for CSV, escolha o separador. O padrão `;` é o que o Excel em português espera.
+6. Clique em **Converter** e acompanhe a barra de progresso.
 
-## Requisitos
-
-- Windows 10 ou Windows 11
-- Python 3.11 ou superior
-- Tkinter/ttk (normalmente incluidos no instalador oficial do Python para Windows)
-- `openpyxl` para XLSX
-- PyInstaller para gerar `.exe`
-
-## Para desenvolvedor
-
-### Criar ambiente virtual
-
-Na pasta do projeto:
-
-```bat
-python -m venv .venv
-```
-
-### Ativar no Windows
-
-```bat
-.venv\Scripts\activate
-```
-
-### Instalar dependencias
-
-```bat
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-### Executar a interface grafica
-
-```bat
-python app.py
-```
-
-### Executar a CLI
-
-```bat
-python cli.py data001.bin -f xlsx
-```
-
-Para gerar a versao completa de debug pela CLI:
-
-```bat
-python cli.py data001.bin -f xlsx --extended-debug
-```
-
-CSV com delimitador `;`:
-
-```bat
-python cli.py data001.bin -f csv --delimiter ";"
-```
-
-CSV + XLSX em uma pasta/base especifica:
-
-```bat
-python cli.py data001.bin -f both -o C:\dados\resultado\data001_decoded --delimiter ";"
-```
-
-## Abrindo no PyCharm
-
-1. Extraia o ZIP.
-2. No PyCharm, escolha **Open** e selecione a pasta `datalogger_decoder`.
-3. Abra **Settings > Project > Python Interpreter**.
-4. Crie um novo ambiente virtual `.venv` ou selecione um ja existente com Python 3.11+.
-5. Instale `requirements.txt` pelo PyCharm ou execute `pip install -r requirements.txt` no terminal integrado.
-6. Abra `app.py` e execute-o.
-
-A pasta `.venv` nao faz parte do ZIP e nao deve ser versionada.
-
-## Fluxo da GUI
-
-1. Selecione um arquivo `.bin`.
-2. Escolha a pasta de destino. Por padrao, ao selecionar o `.bin`, a propria pasta do arquivo e sugerida.
-3. Escolha `XLSX`, `CSV` ou `CSV + XLSX`.
-4. Deixe **Opção avançada: versão estendida para debug dos pacotes** desmarcada para a saida reduzida (padrao), ou marque-a para preservar todas as colunas internas do decoder.
-5. Para CSV, selecione o delimitador. O padrao da GUI e `;`, adequado para muitos ambientes Excel/pt-BR.
-6. Clique em **Converter**.
-7. Acompanhe a barra, percentual e contagem de registros.
-8. Ao concluir, use **Abrir pasta de destino** no Windows, se desejar.
-
-Os arquivos recebem nomes como:
+O arquivo original nunca é alterado. A planilha sai com o mesmo nome do `.bin` mais um sufixo:
 
 ```text
 data001.bin
 data001_decoded.csv
 data001_decoded.xlsx
-data001_decoded_debug.csv
-data001_decoded_debug.xlsx
 ```
 
-Os nomes com `_decoded` correspondem ao formato reduzido. Ao marcar a opcao avancada, o sufixo `_decoded_debug` evita que a planilha completa sobrescreva a versao reduzida, e vice-versa.
+## O que vem na planilha
 
-### Formatos de dados
+Cada linha da planilha é uma medida de um sensor em um instante:
 
-No modo reduzido, cada grandeza decodificada ocupa uma linha nas colunas:
+| Coluna | O que é |
+| --- | --- |
+| `source_file` | arquivo `.bin` de origem |
+| `byte_offset` | posição do registro dentro do `.bin` |
+| `timestamp_raw_ms` | tempo gravado pelo carro, em milissegundos |
+| `time_s` | tempo em segundos, já corrigido quando o contador do carro dá a volta |
+| `record_type` | tipo do pacote gravado |
+| `signal` | nome da grandeza medida |
+| `value` | valor da medida |
+| `unit` | unidade do valor |
+| `source_axis` | eixo físico do sensor (só na IMU) |
+| `raw_value` | valor exatamente como estava no binário |
+| `flags` | `OK` ou um aviso sobre aquele registro |
 
-```text
-source_file, byte_offset, timestamp_raw_ms, time_s, record_type,
-signal, value, unit, source_axis, raw_value, flags
+Para plotar um sensor, filtre a coluna `signal` pelo nome dele e use `time_s` no eixo X e `value` no eixo Y.
+
+### Sinais disponíveis
+
+| `signal` | `unit` | Descrição | Taxa |
+| --- | --- | --- | --- |
+| `velocity` | `m/s` | velocidade do carro | 100 Hz |
+| `rpm` | `rpm` | rotação do motor | 100 Hz |
+| `fuel` | `raw_10bit` | nível de combustível que o carro gravou (1 = vazio, 7 = cheio) | 100 Hz |
+| `fuel_adc_raw` | `adc_12bit` | leitura bruta do sensor de combustível, com o balanço do tanque | 100 Hz |
+| `fuel_adc_filtered` | `adc_12bit` | a mesma leitura depois do filtro de Kalman | 100 Hz |
+| `fuel_level_raw` | `level_1_7` | nível que a leitura bruta indicaria | 100 Hz |
+| `fuel_level_filtered` | `level_1_7` | nível da leitura filtrada | 100 Hz |
+| `AX`, `AY`, `AZ` | `LSB` | acelerômetro | 250 Hz |
+| `GX`, `GY`, `GZ` | `LSB` | giroscópio | 250 Hz |
+
+### Sobre os sinais de combustível
+
+Com o carro em movimento o combustível balança dentro do tanque (sloshing) e a leitura do sensor oscila muito. O firmware `MDA_R26_KALMAN` passa essa leitura por um filtro de Kalman antes de decidir o nível mostrado ao piloto, e grava no SD tanto a leitura bruta quanto a filtrada.
+
+Plotando `fuel_adc_raw` contra `fuel_adc_filtered` você vê o efeito do filtro. Plotando `fuel_level_raw` contra `fuel_level_filtered` você vê o nível pulando sem o filtro e descendo em degraus com ele. No ADC, valor menor significa tanque mais cheio.
+
+Os níveis `fuel_level_*` são calculados aqui no decoder, com os mesmos limites que o firmware usa em `Read_COMB()`:
+
+| Nível | 7 | 6 | 5 | 4 | 3 | 2 | 1 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ADC menor que | 390 | 1010 | 1630 | 2280 | 2900 | 3500 | (acima) |
+
+Se esses limites mudarem no firmware, atualize `FUEL_LEVEL_ADC_THRESHOLDS` em `decoder.py`. O sinal `fuel` é o que o carro realmente gravou e serve de referência. Arquivos gravados por firmwares anteriores, que não têm a leitura do ADC, continuam sendo convertidos normalmente.
+
+### Avisos na coluna `flags`
+
+| Aviso | Significado |
+| --- | --- |
+| `OK` | nada de especial |
+| `TIMESTAMP_WRAP` | o contador de tempo do carro deu a volta neste registro; `time_s` já está corrigido |
+| `PACKING_CORRECTED` | o valor do acelerômetro foi corrigido de um efeito conhecido do empacotamento no firmware |
+| `PADDING` | espaço vazio no fim de um bloco do SD, sem medida |
+| `INVALID_PACKET` | pacote que o decoder não reconhece |
+
+## Versão estendida para debug
+
+Marcando **Opção avançada: versão estendida para debug dos pacotes**, a planilha traz uma linha por pacote com todos os campos internos: bytes em hexadecimal, cabeçalho, payload, posição no bloco do SD e cada valor decodificado. Ela é útil para investigar o firmware, não para plotar.
+
+Essa versão recebe o sufixo `_decoded_debug`, então nunca sobrescreve a planilha normal.
+
+## Para quem vai mexer no código
+
+Você precisa de Python 3.11 ou superior no Windows. Na pasta do projeto:
+
+```bat
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-Pacotes `VELOCITY_RPM_FUEL` geram tres linhas e pacotes IMU geram duas. Marcadores de sessao, padding e pacotes desconhecidos permanecem rastreaveis em uma linha sem grandeza inventada. O campo `flags` registra `TIMESTAMP_WRAP`, `PACKING_CORRECTED`, `PADDING` ou `INVALID_PACKET`; sem condicao especial, recebe `OK`.
+Abrir a interface gráfica:
 
-No modo estendido, cada pacote continua gerando exatamente uma linha com a lista completa e preexistente de campos internos.
-
-## Processamento em background e thread safety
-
-A conversao nao roda na thread principal do Tkinter. `app.py` cria uma `threading.Thread` dedicada para executar `convert_file()`.
-
-A worker **nao altera widgets diretamente**. Ela publica eventos em uma `queue.Queue`. A thread principal consulta essa fila periodicamente com `root.after(...)` e somente ela atualiza `ttk.Progressbar`, labels e caixas de dialogo. Assim, a janela permanece responsiva durante arquivos grandes.
-
-O motor de conversao chama o callback de progresso de forma limitada: por padrao a cada 10.000 registros, alem do inicio e do final. Como cada registro possui 8 bytes, o total e calculado pelo tamanho do arquivo dividido por 8.
-
-## Streaming e uso de memoria
-
-`decoder.iter_decoded_records()` abre o arquivo em modo `rb` e le apenas 8 bytes por vez. O arquivo inteiro nao e carregado na RAM.
-
-CSV e gravado linha a linha. XLSX usa:
-
-```python
-Workbook(write_only=True)
+```bat
+python app.py
 ```
 
-Quando a planilha atinge o limite do Excel (`1.048.576` linhas, incluindo cabecalho), uma nova aba e criada automaticamente:
+Converter pelo terminal:
 
-```text
-records_001
-records_002
-records_003
+```bat
+python cli.py data001.bin -f csv --delimiter ";"
+python cli.py data001.bin -f both -o C:\dados\resultado\data001_decoded
+python cli.py data001.bin -f xlsx --extended-debug
 ```
 
-## Validacoes e erros
-
-Antes da conversao, o programa verifica:
-
-- existencia do arquivo;
-- arquivo vazio;
-- tamanho multiplo de 8 bytes;
-- formato de saida;
-- delimitador CSV com exatamente um caractere;
-- criacao das pastas de destino;
-- disponibilidade do `openpyxl` quando XLSX e solicitado.
-
-Falhas conhecidas sao mostradas ao usuario em `messagebox.showerror`. Detalhes tecnicos e stack traces ficam no log.
-
-Se uma conversao falhar, o programa tenta remover arquivos de saida parciais. O `.bin` de entrada nunca e aberto para escrita e nunca e alterado.
-
-## Logging
-
-Em desenvolvimento, o log e criado preferencialmente em:
-
-```text
-logs\datalogger_decoder.log
-```
-
-Ao rodar como `.exe`, o programa tenta primeiro uma pasta `logs` ao lado do executavel. Se ela nao for gravavel, usa `%LOCALAPPDATA%\DataloggerDecoder\logs` e, como ultimo fallback, uma pasta no perfil do usuario.
-
-O log registra inicio da aplicacao, selecao de arquivos/pastas, inicio e termino da conversao, quantidade de registros, tempo de processamento, saidas e excecoes.
-
-## Testes
-
-Os testes usam o runner `unittest` e a dependencia `openpyxl` ja declarada no projeto para validar os arquivos XLSX.
-
-Executar:
+Rodar os testes:
 
 ```bat
 python -m unittest discover -s tests -v
 ```
 
-Eles cobrem:
-
-- `signed_16`;
-- unwrap de timestamp;
-- padding no ultimo slot do bloco de 2048 bytes;
-- registro `VELOCITY_RPM_FUEL`;
-- correcao existente do IMU para gyro negativo;
-- arquivo vazio e tamanho invalido;
-- caminhos automaticos de saida;
-- conversao CSV em streaming e callback de progresso.
-- formato reduzido em linhas por grandeza;
-- mapeamento logico/fisico real dos eixos da IMU;
-- equivalencia dos valores de velocidade, RPM e combustivel entre os dois modos;
-- cabecalhos e quantidade de linhas dos arquivos XLSX reduzido e estendido.
-
-## Validacao de sintaxe
-
-Para compilar todos os modulos Python:
+Gerar o executável, que sai em `dist\DataloggerDecoder.exe`:
 
 ```bat
-python -m compileall .
-```
-
-## Gerando o EXE com PyInstaller
-
-Com o ambiente virtual ativo e as dependencias instaladas:
-
-```bat
-python -m PyInstaller --clean --noconfirm --onefile --windowed --name DataloggerDecoder app.py
-```
-
-Ou execute:
-
-```text
 build.bat
 ```
 
-O executavel sera criado em:
+### Como o código está organizado
 
-```text
-dist\DataloggerDecoder.exe
-```
+| Arquivo | Papel |
+| --- | --- |
+| `decoder.py` | entende o formato binário e lê o arquivo registro por registro |
+| `converter.py` | monta as linhas da planilha e grava CSV e XLSX |
+| `app.py` | interface gráfica (Tkinter) |
+| `cli.py` | interface de terminal, usando o mesmo motor da interface gráfica |
+| `logging_config.py` | define onde os logs são gravados |
+| `tests/` | testes automáticos do decoder e do conversor |
 
-O `openpyxl` possui suporte conhecido nos hooks do PyInstaller moderno, portanto nao foi necessario adicionar `hidden-import` manual neste projeto. Se futuramente forem adicionados plugins, assets ou bibliotecas carregadas dinamicamente, o comando de build pode precisar ser ajustado.
+### O formato binário
 
-### Adicionando icone futuramente
+Cada registro tem 8 bytes, em little-endian:
 
-Coloque um `.ico` em `assets` e acrescente ao comando do PyInstaller:
+| Bits | Campo |
+| --- | --- |
+| 21 | tempo em milissegundos |
+| 3 | controle |
+| 8 | ID do pacote |
+| 32 | dados |
 
-```bat
---icon assets\datalogger_decoder.ico
-```
+| ID | Tipo | Conteúdo dos 32 bits de dados |
+| --- | --- | --- |
+| `0x00` | `SESSION_MARKER` | marca o início de uma gravação |
+| `0x01` | `VELOCITY_RPM_FUEL` | velocidade (10 bits), RPM (12 bits), nível de combustível (10 bits) |
+| `0x02` | `FUEL_ADC` | ADC bruto (16 bits), ADC filtrado (16 bits) |
+| `0x10` | `IMU_AX_GX` | acelerômetro X (16 bits), giroscópio X (16 bits) |
+| `0x14` | `IMU_AY_LOGICAL_GY` | acelerômetro Y lógico (16 bits), giroscópio Y (16 bits) |
+| `0x18` | `IMU_AZ_LOGICAL_GZ` | acelerômetro Z lógico (16 bits), giroscópio Z (16 bits) |
 
-## Separacao de responsabilidades
+O firmware troca os eixos Y e Z do acelerômetro ao gravar. A coluna `source_axis` mostra o eixo físico de cada medida.
 
-- `decoder.py`: conhece somente o protocolo binario e a iteracao dos registros.
-- `converter.py`: formata a saida reduzida ou estendida, grava CSV/XLSX e informa progresso, mas nao conhece Tkinter.
-- `app.py`: conhece Tkinter, threading e fila de eventos, mas reutiliza o motor de conversao.
-- `cli.py`: reutiliza exatamente `converter.py`/`decoder.py`; nao duplica a decodificacao.
-- `logging_config.py`: centraliza onde e como os logs sao gravados.
+### Detalhes de funcionamento
+
+- **Arquivos grandes:** o `.bin` é lido 8 bytes por vez e a planilha é gravada linha a linha, então o programa não carrega o arquivo inteiro na memória. Quando o XLSX chega ao limite de 1.048.576 linhas do Excel, uma nova aba é criada (`records_001`, `records_002`, ...).
+- **Janela sempre responsiva:** a conversão roda em uma thread separada e avisa o progresso por uma fila; só a thread principal mexe na tela.
+- **Validações:** o programa recusa arquivo inexistente, vazio ou com tamanho que não seja múltiplo de 8 bytes. Se a conversão falhar no meio, a planilha incompleta é apagada.
+- **Logs:** ficam em `logs\datalogger_decoder.log`. No `.exe`, o programa tenta a pasta `logs` ao lado do executável e, se não puder gravar ali, usa `%LOCALAPPDATA%\DataloggerDecoder\logs`.
