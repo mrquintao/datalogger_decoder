@@ -17,6 +17,18 @@ TIMESTAMP_MODULUS = 1 << TIMESTAMP_BITS
 TIMESTAMP_MASK = TIMESTAMP_MODULUS - 1
 TIMESTAMP_HALF_RANGE = TIMESTAMP_MODULUS // 2
 
+# Limites superiores (exclusivos) do ADC de 12 bits para cada nivel discreto,
+# espelhando Read_COMB() do firmware MDA_R26_KALMAN. ADC menor = tanque mais cheio.
+FUEL_LEVEL_ADC_THRESHOLDS = (
+    (390, 7),
+    (1010, 6),
+    (1630, 5),
+    (2280, 4),
+    (2900, 3),
+    (3500, 2),
+)
+FUEL_LEVEL_MIN = 1
+
 # A ordem desta lista define as colunas do modo estendido de debug.
 FIELDNAMES = [
     "source_file",
@@ -53,6 +65,11 @@ FIELDNAMES = [
     "imu_gyro_source_axis",
     "imu_gyro_s16",
     "imu_packing_correction_applied",
+    # Colunas novas ficam no final para nao deslocar as preexistentes.
+    "fuel_adc_raw_u16",
+    "fuel_adc_filtered_u16",
+    "fuel_level_from_adc_raw",
+    "fuel_level_from_adc_filtered",
 ]
 
 
@@ -60,6 +77,14 @@ def signed_16(value: int) -> int:
     """Interpreta os 16 bits menos significativos como int16_t."""
     value &= 0xFFFF
     return value - 0x10000 if value & 0x8000 else value
+
+
+def fuel_level_from_adc(adc_value: int) -> int:
+    """Converte uma leitura de ADC no nivel discreto (1 a 7) usado pelo firmware."""
+    for upper_limit, level in FUEL_LEVEL_ADC_THRESHOLDS:
+        if adc_value < upper_limit:
+            return level
+    return FUEL_LEVEL_MIN
 
 
 class TimestampUnwrapper:
@@ -163,6 +188,20 @@ def decode_record(
                 "velocity_km_h_estimated": (velocity / 52.0) * 3.6,
                 "rpm_raw_12bit": rpm,
                 "fuel_raw_10bit": fuel,
+            }
+        )
+    elif packet_id == 0x02:
+        # (adc_raw << 16) + adc_filtered: ADC do combustivel antes e depois do
+        # filtro de Kalman, gravados no mesmo tick do pacote 0x01.
+        adc_raw = (payload_raw >> 16) & 0xFFFF
+        adc_filtered = payload_raw & 0xFFFF
+        row.update(
+            {
+                "record_type": "FUEL_ADC",
+                "fuel_adc_raw_u16": adc_raw,
+                "fuel_adc_filtered_u16": adc_filtered,
+                "fuel_level_from_adc_raw": fuel_level_from_adc(adc_raw),
+                "fuel_level_from_adc_filtered": fuel_level_from_adc(adc_filtered),
             }
         )
     elif packet_id in (0x10, 0x14, 0x18):

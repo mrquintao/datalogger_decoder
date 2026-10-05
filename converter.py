@@ -187,6 +187,31 @@ def iter_analysis_rows(
             }
         return
 
+    if row["record_type"] == "FUEL_ADC":
+        adc_raw = row["fuel_adc_raw_u16"]
+        adc_filtered = row["fuel_adc_filtered_u16"]
+        signals = (
+            ("fuel_adc_raw", adc_raw, "adc_12bit", adc_raw),
+            ("fuel_adc_filtered", adc_filtered, "adc_12bit", adc_filtered),
+            # raw_value guarda o ADC que originou cada nivel discreto.
+            ("fuel_level_raw", row["fuel_level_from_adc_raw"], "level_1_7", adc_raw),
+            (
+                "fuel_level_filtered",
+                row["fuel_level_from_adc_filtered"],
+                "level_1_7",
+                adc_filtered,
+            ),
+        )
+        for signal, value, unit, raw_value in signals:
+            yield {
+                **base,
+                "signal": signal,
+                "value": value,
+                "unit": unit,
+                "raw_value": raw_value,
+            }
+        return
+
     if str(row["record_type"]).startswith("IMU_"):
         accel_signal = str(row["imu_accel_field"]).removesuffix("_LOGICAL")
         signals = (

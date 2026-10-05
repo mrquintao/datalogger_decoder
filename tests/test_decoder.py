@@ -7,6 +7,7 @@ from decoder import (
     TIMESTAMP_MODULUS,
     TimestampUnwrapper,
     decode_record,
+    fuel_level_from_adc,
     signed_16,
 )
 
@@ -22,6 +23,22 @@ class Signed16Tests(unittest.TestCase):
         self.assertEqual(signed_16(0x7FFF), 32767)
         self.assertEqual(signed_16(0x8000), -32768)
         self.assertEqual(signed_16(0xFFFF), -1)
+
+
+class FuelLevelTests(unittest.TestCase):
+    def test_levels_match_firmware_thresholds(self) -> None:
+        cases = {
+            0: 7, 389: 7,
+            390: 6, 1009: 6,
+            1010: 5, 1629: 5,
+            1630: 4, 2279: 4,
+            2280: 3, 2899: 3,
+            2900: 2, 3499: 2,
+            3500: 1, 4095: 1,
+        }
+        for adc_value, level in cases.items():
+            with self.subTest(adc_value=adc_value):
+                self.assertEqual(fuel_level_from_adc(adc_value), level)
 
 
 class TimestampTests(unittest.TestCase):
@@ -61,6 +78,28 @@ class DecodeRecordTests(unittest.TestCase):
         self.assertEqual(row["velocity_m_s_estimated"], 2.0)
         self.assertEqual(row["rpm_raw_12bit"], rpm)
         self.assertEqual(row["fuel_raw_10bit"], fuel)
+
+    def test_fuel_adc_record(self) -> None:
+        adc_raw = 2950
+        adc_filtered = 2301
+        record = make_record(
+            timestamp=1234,
+            control=1,
+            packet_id=0x02,
+            payload=(adc_raw << 16) + adc_filtered,
+        )
+        row = decode_record(
+            record,
+            source_file="data001.bin",
+            record_index=1,
+            timestamp=TimestampUnwrapper(),
+        )
+        self.assertEqual(row["record_type"], "FUEL_ADC")
+        self.assertEqual(row["fuel_adc_raw_u16"], adc_raw)
+        self.assertEqual(row["fuel_adc_filtered_u16"], adc_filtered)
+        self.assertEqual(row["fuel_level_from_adc_raw"], 2)
+        self.assertEqual(row["fuel_level_from_adc_filtered"], 3)
+        self.assertIsNone(row["fuel_raw_10bit"])
 
     def test_imu_negative_gyro_applies_existing_correction(self) -> None:
         accel_u16 = 1000

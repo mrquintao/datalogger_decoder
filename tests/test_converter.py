@@ -151,6 +151,45 @@ class AnalysisRowsTests(unittest.TestCase):
         self.assertTrue(all(row["time_s"] == 1.234 for row in rows))
         self.assertTrue(all(row["flags"] == "OK" for row in rows))
 
+    def test_fuel_adc_becomes_adc_and_discrete_level_signals(self) -> None:
+        adc_raw = 2950
+        adc_filtered = 2301
+        decoded = decode_record(
+            make_record(
+                timestamp=1234,
+                control=1,
+                packet_id=0x02,
+                payload=(adc_raw << 16) + adc_filtered,
+            ),
+            source_file="DATA006.BIN",
+            record_index=2,
+            timestamp=TimestampUnwrapper(),
+        )
+
+        rows = list(iter_analysis_rows(decoded))
+
+        self.assertEqual(
+            [row["signal"] for row in rows],
+            [
+                "fuel_adc_raw",
+                "fuel_adc_filtered",
+                "fuel_level_raw",
+                "fuel_level_filtered",
+            ],
+        )
+        self.assertEqual([row["value"] for row in rows], [adc_raw, adc_filtered, 2, 3])
+        self.assertEqual(
+            [row["raw_value"] for row in rows],
+            [adc_raw, adc_filtered, adc_raw, adc_filtered],
+        )
+        self.assertEqual(
+            [row["unit"] for row in rows],
+            ["adc_12bit", "adc_12bit", "level_1_7", "level_1_7"],
+        )
+        self.assertTrue(all(row["record_type"] == "FUEL_ADC" for row in rows))
+        self.assertTrue(all(row["time_s"] == 1.234 for row in rows))
+        self.assertTrue(all(row["flags"] == "OK" for row in rows))
+
     def test_imu_uses_existing_logical_to_physical_axis_mapping(self) -> None:
         accel_payload = 1000
         gyro = 0xFFFF
